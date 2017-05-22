@@ -10,6 +10,8 @@
 6. **最终解析table下的所有td，table只有两列，刚好符合map的key->value形式，所以最终使用map存储数据**
 7. **最终还需要把td中的文本内包含的html的标记去除，一切OK**
 8. **有的ISBN编码对应了多本书籍，所以查出来是一个书籍列表；解析列表，并利用它提供的超链接继续请求书籍的详情**
+
+![示例图片](./images/1.png) 
 * author：loserStar
 * email:362527240@qq.com
 * email2:xinxin321198@gmail.com
