@@ -1,4 +1,5 @@
 ﻿using HtmlAgilityPack;
+using ISBN_searchBookInfo;
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
@@ -16,6 +17,18 @@ namespace ISBNQuery
     {
         public static HtmlWeb htmlWeb = new HtmlWeb();
 
+
+        /// <summary>
+        /// 根据一个url连接请求整个页面html
+        /// </summary>
+        /// <param name="url"></param>
+        /// <returns></returns>
+        public static String getHtmlStr(String url)
+        {
+            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load(@url);
+            return htmlDoc.DocumentNode.OuterHtml;
+        }
+
         /// <summary>
         /// 得到查询用的加密key
         /// </summary>
@@ -23,8 +36,10 @@ namespace ISBNQuery
         public static String getKey()
         {
             String key = "";
-            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load(@"http://opac.nlc.cn/F/");
-            HtmlNode form1 = htmlDoc.DocumentNode.SelectSingleNode("//form[@name='form1']");
+            String html = getHtmlStr(@"http://opac.nlc.cn/F/");
+            HtmlDocument doc = new HtmlDocument();
+            doc.LoadHtml(html);
+            HtmlNode form1 = doc.DocumentNode.SelectSingleNode("//form[@name='form1']");
             key = form1.GetAttributeValue("action", "");
             return key;
         }
@@ -34,11 +49,13 @@ namespace ISBNQuery
         /// </summary>
         /// <param name="isbn"></param>
         /// <returns></returns>
-        public static String getHtmlStr(String isbn)
+        public static String getResultHtmlStr(String isbn)
         {
             HtmlWeb htmlWeb = new HtmlWeb();
-            HtmlAgilityPack.HtmlDocument htmlDoc = htmlWeb.Load(getKey() + "?func=find-b&find_code=ISB&request=" + isbn);
-            HtmlNode documentNode = htmlDoc.DocumentNode;
+            String html = getHtmlStr(getKey() + "?func=find-b&find_code=ISB&request=" + isbn);
+            HtmlDocument doc = new HtmlDocument();
+            doc.LoadHtml(html);
+            HtmlNode documentNode = doc.DocumentNode;
             return documentNode.OuterHtml;
 
 
@@ -57,27 +74,41 @@ namespace ISBNQuery
             */
 
         }
-
         /// <summary>
-        /// 根据整个html解析得到保存主数据的那个table
+        /// 判断这段html是列表还详细信息
         /// </summary>
         /// <param name="html"></param>
-        /// <returns></returns>
-        public static String getTableStr(String html)
+        /// <returns>true：table，false:List</returns>
+        public static bool isDetailOrList(String html)
         {
-            String s = "";
+            bool flag = false;
             HtmlDocument doc = new HtmlDocument();
             doc.LoadHtml(html);
-            HtmlNode feedbackbar = doc.DocumentNode.SelectSingleNode("//div[@id='feedbackbar']");
-            if (feedbackbar.InnerText.Contains("数据库里没有这条请求记录"))
+            HtmlNode details2Div = doc.DocumentNode.SelectSingleNode("//div[@id='details2']");
+            HtmlNode hitnumDiv = doc.DocumentNode.SelectSingleNode("//div[@id='hitnum']");
+            HtmlNode feedbackbarDiv = doc.DocumentNode.SelectSingleNode("//div[@id='feedbackbar']"); 
+            if (null != hitnumDiv)
             {
-                throw new Exception("没有查到此书的记录");
+                flag = false;
+
+            }else if (null!= details2Div)
+            {
+                flag = true;
+                
+            }
+            else if (feedbackbarDiv.InnerText.Contains("数据库里没有这条请求记录"))
+            {
+                throw new Exception("没有查到此书的记录！");
+            }
+            else if(feedbackbarDiv.InnerText.Contains("检索请求解析错误"))
+            {
+                throw new Exception("检索请求解析错误！");
             }
             else
             {
-                s =  doc.DocumentNode.SelectSingleNode("//table[@id='td']").OuterHtml;
+                throw new Exception("不能解析此段html字符串！");
             }
-            return s;
+            return flag;
         }
 
         /// <summary>
@@ -85,39 +116,20 @@ namespace ISBNQuery
         /// </summary>
         /// <param name="table"></param>
         /// <returns></returns>
-        public static List<String> getTdList(String table)
+        public static List<String> getDetailTdList(String html)
         {
-            if (null==table||"".Equals(table))
+            if (null==html||"".Equals(html))
             {
                 throw new Exception("请传入table的HTML字符串");
             }
             List<String> returnList = new List<String>();
             HtmlDocument doc = new HtmlDocument();
-            doc.LoadHtml(table);
-            HtmlNodeCollection nodeCollecation =  doc.DocumentNode.SelectNodes("//td[@class='td1']");
+            doc.LoadHtml(html);
+            HtmlNodeCollection nodeCollecation =  doc.DocumentNode.SelectNodes("//table[@id='td']//td[@class='td1']");
             foreach(HtmlNode node in nodeCollecation)
             {
-                String Htmlstring = node.InnerText;
-                Htmlstring = Regex.Replace(Htmlstring, @"<script[^>]*?>.*?</script>", "", RegexOptions.IgnoreCase);
-                //删除HTML  
-                //Htmlstring = Regex.Replace(Htmlstring, @"<(.[^>]*)>", "", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"([\r\n])[\s]+", "", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"<div", "<p", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"</div>", "</p>", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"-->", "", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"<!--.*", "", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(quot|#34);", "\"", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(amp|#38);", "&", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(lt|#60);", "<", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(gt|#62);", ">", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(nbsp|#160);", " ", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(iexcl|#161);", "\xa1", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(cent|#162);", "\xa2", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(pound|#163);", "\xa3", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&(copy|#169);", "\xa9", RegexOptions.IgnoreCase);
-                Htmlstring = Regex.Replace(Htmlstring, @"&#(\d+);", "", RegexOptions.IgnoreCase);
-
-                returnList.Add(Htmlstring.TrimStart().TrimEnd());
+                String htmlString = removeEscapeCharacters( node.InnerText);
+                returnList.Add(htmlString);
             }
             return returnList;
         }
@@ -128,9 +140,7 @@ namespace ISBNQuery
         /// <param name="isbn">isbn图书编号</param>
         /// <returns>一个Map存对应的值
         /// </returns>
-        public static Dictionary<String, String> getbookInfo(String isbn)
-        {
-            List<String> list = getTdList(getTableStr(getHtmlStr(isbn)));
+        public static Dictionary<String, String> getDetails(List<String> list) { 
             Dictionary<String, String> map = new Dictionary<String, String>();
             for(int i = 0;i < list.Count; i++)
             {
@@ -191,5 +201,55 @@ namespace ISBNQuery
             return map;
         }
 
+        /// <summary>
+        /// 解析同一个isbn的书本列表
+        /// </summary>
+        /// <param name="html"></param>
+        /// <returns></returns>
+        public static List<Title> getTileList(String html)
+        {
+
+            List<Title> titleList = new List<Title>();
+            HtmlDocument doc = new HtmlDocument();
+            doc.LoadHtml(html);
+            HtmlNodeCollection aList = doc.DocumentNode.SelectNodes("//div[@id='brief']//div[@class='itemtitle']/a[1]");
+            for(int i = 0; i < aList.Count; i++)
+            {
+                Title title = new Title();
+                title.Name = removeEscapeCharacters(aList[i].InnerText);
+                title.Href = aList[i].Attributes["href"].Value.ToString();
+                titleList.Add(title);
+            }
+            return titleList;
+        }
+
+        /// <summary>
+        /// 消除转义字符以及前后的空格
+        /// </summary>
+        /// <param name="Htmlstring"></param>
+        /// <returns></returns>
+        public static String removeEscapeCharacters(String Htmlstring)
+        {
+            Htmlstring = Regex.Replace(Htmlstring, @"<script[^>]*?>.*?</script>", "", RegexOptions.IgnoreCase);
+            //删除HTML  
+            //Htmlstring = Regex.Replace(Htmlstring, @"<(.[^>]*)>", "", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"([\r\n])[\s]+", "", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"<div", "<p", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"</div>", "</p>", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"-->", "", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"<!--.*", "", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(quot|#34);", "\"", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(amp|#38);", "&", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(lt|#60);", "<", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(gt|#62);", ">", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(nbsp|#160);", " ", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(iexcl|#161);", "\xa1", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(cent|#162);", "\xa2", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(pound|#163);", "\xa3", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&(copy|#169);", "\xa9", RegexOptions.IgnoreCase);
+            Htmlstring = Regex.Replace(Htmlstring, @"&#(\d+);", "", RegexOptions.IgnoreCase);
+            Htmlstring = Htmlstring.TrimStart().TrimEnd();
+            return Htmlstring;
+        }
     }
 }

@@ -2,6 +2,7 @@
 using System.Windows.Forms;
 using ISBNQuery;
 using System.Collections.Generic;
+using ISBN_searchBookInfo;
 
 namespace ISBNQuery
 {
@@ -10,7 +11,7 @@ namespace ISBNQuery
         public Form1()
         {
             InitializeComponent();
-            textBox_isbn.Text = "";
+            textBox_isbn.Text = "9787229019358";
         }
 
 
@@ -25,17 +26,39 @@ namespace ISBNQuery
         private void button_query_Click(object sender, EventArgs e)
         {
             textBox_bookInfo.Clear();
-            Dictionary<String, String> map = new Dictionary<string, string>();
-            String one = "";
-            String two ="";
-            String three ="";
+            comboBox_booklist.Items.Clear();
             try
             {
-                map = opcaForISBN.getbookInfo(textBox_isbn.Text);
-                //获取单个数据的方式
-                one = map["题名与责任"];
-                two = map["著者"];
-                three = map["不存在的字段"];//如果取不存在的字段会抛错，给定关键字不在字典中
+                comboBox_booklist.Enabled = false;
+                button_detail.Enabled = false;
+                String html = opcaForISBN.getResultHtmlStr(textBox_isbn.Text);
+                bool isTable = opcaForISBN.isDetailOrList(html);
+                if (isTable)
+                {
+                    //以详情形式解析
+                    List<String> tdList = opcaForISBN.getDetailTdList(html);
+
+                    Dictionary<String, String> map = opcaForISBN.getDetails(tdList);
+                    foreach (KeyValuePair<String, String> p in map)
+                    {
+                        textBox_bookInfo.Text += p.Key + ":" + p.Value + "\r\n";
+                        textBox_bookInfo.Text += "---------------------------------------\r\n";
+                    }
+                }
+                else
+                {
+                    //以列表形式解析
+                    comboBox_booklist.Enabled = true;
+                    button_detail.Enabled = true;
+
+                    List<Title> titleList = opcaForISBN.getTileList(html);
+                    foreach (Title title in titleList)
+                    {
+                        comboBox_booklist.Items.Add(title);
+                    }
+                    comboBox_booklist.DisplayMember = "Name";
+                    comboBox_booklist.ValueMember = "Href";
+                }
             }
             catch (Exception ex)
             {
@@ -43,13 +66,54 @@ namespace ISBNQuery
             }
             finally
             {
-                foreach (KeyValuePair<String, String> p in map)
+
+            }
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            textBox_isbn.Text = "9787555227069";
+        }
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            textBox_isbn.Text = "112233";
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            textBox_isbn.Text = @"isbn=""123""";
+        }
+
+        private void button_detail_Click(object sender, EventArgs e)
+        {
+            textBox_bookInfo.Clear();
+            if(null != comboBox_booklist.SelectedItem)
+            {
+                Title title = (Title)comboBox_booklist.SelectedItem;
+                String html = opcaForISBN.getHtmlStr(title.Href);
+                bool isDetail = opcaForISBN.isDetailOrList(html);
+                if (isDetail)
                 {
-                    textBox_bookInfo.Text += p.Key + ":" + p.Value + "\r\n";
-                    textBox_bookInfo.Text += "---------------------------------------\r\n";
+                    //必须是detail的页面才能解析
+                    List<String> tdList = opcaForISBN.getDetailTdList(html);
+                    Dictionary<String, String> map = opcaForISBN.getDetails(tdList);
+
+                    foreach (KeyValuePair<String, String> p in map)
+                    {
+                        textBox_bookInfo.Text += p.Key + ":" + p.Value + "\r\n";
+                        textBox_bookInfo.Text += "---------------------------------------\r\n";
+                    }
+                
                 }
-                textBox_bookInfo.Text += "*****分割线*******以上是遍历获取所有值*********以下是获取单个值*************\r\n";
-                textBox_bookInfo.Text += one + "\r\n" + two + "\r\n"+three;
+                else
+                {
+                    MessageBox.Show("此连接请求到一个书本列表，不能解析");
+                }
+            }
+            else
+            {
+                MessageBox.Show("请选择一本书再进行查询");
             }
         }
     }
