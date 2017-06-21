@@ -11,7 +11,7 @@ namespace ISBNQuery
         public Form1()
         {
             InitializeComponent();
-            textBox_isbn.Text = "9787229019358";
+            textBox_isbn.Text = "";
         }
 
 
